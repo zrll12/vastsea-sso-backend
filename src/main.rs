@@ -1,47 +1,48 @@
+use crate::config::core::CoreConfig;
+use crate::config::get_config;
 use axum::extract::DefaultBodyLimit;
 use axum::http::HeaderValue;
 use axum_server::tls_rustls::RustlsConfig;
 use lazy_static::lazy_static;
+use migration::{Migrator, MigratorTrait};
 use sea_orm::{ConnectOptions, Database, DatabaseConnection};
 use tower_http::catch_panic::CatchPanicLayer;
 use tower_http::classify::StatusInRangeAsFailures;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
+use tracing::log::{warn, LevelFilter};
 use tracing::{debug, info};
-use tracing::log::{LevelFilter, warn};
 use tracing_appender::non_blocking;
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
-use tracing_subscriber::{EnvFilter, fmt, Registry};
 use tracing_subscriber::fmt::time::ChronoLocal;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-use migration::{Migrator, MigratorTrait};
-use crate::config::core::CoreConfig;
-use crate::config::geetest::GeetestConfig;
-use crate::config::get_config;
+use tracing_subscriber::{fmt, EnvFilter, Registry};
 
 mod config;
-mod routes;
 mod entity;
+mod routes;
 mod service;
 
 lazy_static! {
     static ref CORE_CONFIG: CoreConfig = get_config("core");
-    static ref GEETEST_CONFIG: GeetestConfig = get_config("geetest");
     static ref DATABASE: DatabaseConnection = {
         let mut opt = ConnectOptions::new(&CORE_CONFIG.db_uri);
         opt.sqlx_logging(true);
         opt.sqlx_logging_level(LevelFilter::Info);
         futures::executor::block_on(Database::connect(opt)).unwrap_or_else(|e| {
-            panic!("Failed to connect to database '{}': {}", CORE_CONFIG.db_uri, e)
+            panic!(
+                "Failed to connect to database '{}': {}",
+                CORE_CONFIG.db_uri, e
+            )
         })
     };
 }
 
 #[tokio::main]
 async fn main() {
-    let env_filter =
-        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(&CORE_CONFIG.trace_level));
+    let env_filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new(&CORE_CONFIG.trace_level));
     let file_appender = RollingFileAppender::builder()
         .rotation(Rotation::DAILY)
         .filename_suffix("log")
@@ -65,15 +66,24 @@ async fn main() {
 
     Migrator::up(&*DATABASE, None).await.unwrap();
 
-    let origins = CORE_CONFIG.origins.clone().iter().map(|x| x.parse().unwrap()).collect::<Vec<HeaderValue>>();
+    let origins = CORE_CONFIG
+        .origins
+        .clone()
+        .iter()
+        .map(|x| x.parse().unwrap())
+        .collect::<Vec<HeaderValue>>();
     let app = routes::all_routers()
         .layer(TraceLayer::new(
-            StatusInRangeAsFailures::new(400..=599).into_make_classifier()
+            StatusInRangeAsFailures::new(400..=599).into_make_classifier(),
         ))
         .layer(DefaultBodyLimit::max(
             CORE_CONFIG.max_body_size * 1024 * 1024,
         ))
-        .layer(CorsLayer::very_permissive().allow_origin(origins).allow_credentials(CORE_CONFIG.allow_credentials))
+        .layer(
+            CorsLayer::very_permissive()
+                .allow_origin(origins)
+                .allow_credentials(CORE_CONFIG.allow_credentials),
+        )
         .layer(CatchPanicLayer::new());
 
     let addr = CORE_CONFIG.server_addr.parse().unwrap();
@@ -81,10 +91,9 @@ async fn main() {
 
     if CORE_CONFIG.tls {
         debug!("HTTPS enabled.");
-        let tls_config =
-            RustlsConfig::from_pem_file(&CORE_CONFIG.ssl_cert, &CORE_CONFIG.ssl_key)
-                .await
-                .unwrap();
+        let tls_config = RustlsConfig::from_pem_file(&CORE_CONFIG.ssl_cert, &CORE_CONFIG.ssl_key)
+            .await
+            .unwrap();
         axum_server::bind_rustls(addr, tls_config)
             .serve(app.into_make_service())
             .await

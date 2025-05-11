@@ -1,8 +1,8 @@
 mod auth;
 pub mod result;
 
-use axum::Router;
 use axum::routing::get;
+use axum::Router;
 use serde::Serialize;
 use shadow_rs::shadow;
 
