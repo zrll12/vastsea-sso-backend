@@ -17,13 +17,17 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use migration::{Migrator, MigratorTrait};
 use crate::config::core::CoreConfig;
+use crate::config::geetest::GeetestConfig;
 use crate::config::get_config;
 
 mod config;
-mod controller;
+mod routes;
+mod entity;
+mod service;
 
 lazy_static! {
     static ref CORE_CONFIG: CoreConfig = get_config("core");
+    static ref GEETEST_CONFIG: GeetestConfig = get_config("geetest");
     static ref DATABASE: DatabaseConnection = {
         let mut opt = ConnectOptions::new(&CORE_CONFIG.db_uri);
         opt.sqlx_logging(true);
@@ -62,7 +66,7 @@ async fn main() {
     Migrator::up(&*DATABASE, None).await.unwrap();
 
     let origins = CORE_CONFIG.origins.clone().iter().map(|x| x.parse().unwrap()).collect::<Vec<HeaderValue>>();
-    let app = controller::all_routers()
+    let app = routes::all_routers()
         .layer(TraceLayer::new(
             StatusInRangeAsFailures::new(400..=599).into_make_classifier()
         ))

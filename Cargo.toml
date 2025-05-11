@@ -8,31 +8,38 @@ edition = "2024"
 members = [".", "migration"]
 
 [dependencies]
-#tracing
+# tracing
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter", "chrono"] }
 tracing-appender = "0.2.3"
 
-#web
+# web
 axum = { version = "0.8.4", features = ["multipart"] }
 tower-http = { version = "0.6.3", features = ["catch-panic", "trace", "cors", "sensitive-headers"] }
 axum-server = { version = "0.7.2", features = ["tls-rustls"] }
 
-#serde
+# serde
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
 serde-inline-default = "0.2.3"
 toml = "0.8.22"
 
-#database
+# database
 migration = {path = "migration"}
 sea-orm = { version = "1.1.11", features = ["macros", "sqlx-postgres", "runtime-tokio-rustls"] }
 
-#tools
+# encrypt
+base64 = "0.22.1"
+sha2 = "0.10.8"
+pbkdf2 = "0.12.2"
+
+# tools
 lazy_static = "1.5.0"
 tokio = "1.45.0"
 diff = "0.1.13"
 futures = "0.3.31"
+rand = "0.8.5"
+shadow-rs = "1.1.1"
 
 
 [build-dependencies]
